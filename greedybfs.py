@@ -1,24 +1,22 @@
+import heapq
+
 class PuzzleNode:
     def __init__(self, state, parent=None):
         self.state = state
         self.parent = parent
-        self.cost = 0  # Cost from start node to current node
-        self.heuristic = self.calculate_heuristic()  # Heuristic value
-
-    def calculate_heuristic(self):
-        # Implement a heuristic function here (e.g., Manhattan distance)
-        # For 8-puzzle, one common heuristic is the Manhattan distance
-        goal_state = [[1, 2, 3], [4, 5, 6], [7, 8, 0]]
-        heuristic = 0
-        for i in range(3):
-            for j in range(3):
-                if self.state[i][j] != 0:
-                    goal_row, goal_col = divmod(self.state[i][j] - 1, 3)
-                    heuristic += abs(i - goal_row) + abs(j - goal_col)
-        return heuristic
+        self.cost = 0
 
     def __lt__(self, other):
-        return (self.cost + self.heuristic) < (other.cost + other.heuristic)
+        return self.cost < other.cost
+
+def manhattan_distance(state, goal_state):
+    distance = 0
+    for i in range(3):
+        for j in range(3):
+            if state[i][j] != goal_state[i][j]:
+                x, y = divmod(goal_state[i][j], 3)
+                distance += abs(x - i) + abs(y - j)
+    return distance
 
 def get_blank_position(state):
     for i in range(3):
@@ -29,42 +27,45 @@ def get_blank_position(state):
 def get_neighbors(node):
     i, j = get_blank_position(node.state)
     neighbors = []
-    moves = [(0, 1), (0, -1), (1, 0), (-1, 0)]  # Possible moves: right, left, down, up
 
-    for move in moves:
-        new_i, new_j = i + move[0], j + move[1]
-        if 0 <= new_i < 3 and 0 <= new_j < 3:
-            new_state = [row[:] for row in node.state]
-            new_state[i][j], new_state[new_i][new_j] = new_state[new_i][new_j], new_state[i][j]
-            neighbors.append(PuzzleNode(new_state, node))
+    for x, y in ((i+1, j), (i-1, j), (i, j+1), (i, j-1)):
+        if 0 <= x < 3 and 0 <= y < 3:
+            neighbor_state = [row[:] for row in node.state]
+            neighbor_state[i][j], neighbor_state[x][y] = neighbor_state[x][y], neighbor_state[i][j]
+            neighbors.append(PuzzleNode(neighbor_state, parent=node))
 
     return neighbors
 
-def greedy_best_first_search(initial_state):
-    start_node = PuzzleNode(initial_state)
-    open_set = [start_node]
-    closed_set = set()
+def greedy_best_first_search(initial_state, goal_state, heuristic):
+    initial_node = PuzzleNode(initial_state)
+    goal_node = PuzzleNode(goal_state)
 
-    while open_set:
-        open_set.sort()  # Sort nodes based on total estimated cost (f = g + h)
-        current_node = open_set.pop(0)
+    if initial_state == goal_state:
+        return [initial_state]
 
-        if current_node.state == [[1, 2, 3], [4, 5, 6], [7, 8, 0]]:
-            # Goal state found
-            path = []
-            while current_node:
-                path.append(current_node.state)
+    priority_queue = [initial_node]
+    visited_states = set()
+
+    while priority_queue:
+        current_node = heapq.heappop(priority_queue)
+
+        if current_node.state == goal_state:
+            path = [current_node.state]
+            while current_node.parent:
                 current_node = current_node.parent
-            return path[::-1]
+                path.append(current_node.state)
+            path.reverse()
+            return path
 
-        closed_set.add(tuple(map(tuple, current_node.state)))
+        visited_states.add(tuple(map(tuple, current_node.state)))
 
-        for neighbor in get_neighbors(current_node):
-            if tuple(map(tuple, neighbor.state)) not in closed_set:
-                neighbor.cost = current_node.cost + 1
-                open_set.append(neighbor)
+        neighbors = get_neighbors(current_node)
+        for neighbor in neighbors:
+            if tuple(map(tuple, neighbor.state)) not in visited_states:
+                neighbor.cost = heuristic(neighbor.state, goal_state)
+                heapq.heappush(priority_queue, neighbor)
 
-    return None  # No solution found
+    return None
 
 # Example usage:
 initial_state = [
@@ -73,12 +74,22 @@ initial_state = [
     [6, 7, 8]
 ]
 
-solution = greedy_best_first_search(initial_state)
-if solution:
-    for step, state in enumerate(solution):
-        print(f"Step {step}:")
+goal_state = [
+    [1, 2, 3],
+    [4, 5, 6],
+    [7, 8, 0]
+]
+
+# Heuristic function (Manhattan distance)
+heuristic_function = manhattan_distance
+
+path = greedy_best_first_search(initial_state, goal_state, heuristic_function)
+
+if path:
+    print("Solution found:")
+    for state in path:
         for row in state:
             print(row)
         print()
 else:
-    print("No solution exists.")
+    print("No solution found.")
